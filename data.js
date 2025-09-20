@@ -40,6 +40,7 @@ async function loadData() {
 }
 
 // Parse movie data from u.item format
+// Parse movie data from u.item format
 function parseItemData(text) {
     const lines = text.split('\n');
     
@@ -55,8 +56,11 @@ function parseItemData(text) {
         // Extract genres (last 19 fields)
         const genreValues = fields.slice(5, 24).map(value => parseInt(value));
         const genres = genreNames.filter((_, index) => genreValues[index] === 1);
+
+        // NEW: бинарный вектор жанров (0/1) для косинусного сходства
+        const genreVector = genreValues.map(v => (v === 1 ? 1 : 0));
         
-        movies.push({ id, title, genres });
+        movies.push({ id, title, genres, genreVector });
     }
 }
 
