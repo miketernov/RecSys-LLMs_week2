@@ -41,6 +41,7 @@ function populateMoviesDropdown() {
 }
 
 // Main recommendation function
+// Main recommendation function
 function getRecommendations() {
     const resultElement = document.getElementById('result');
     
@@ -67,47 +68,62 @@ function getRecommendations() {
         resultElement.textContent = "Calculating recommendations...";
         resultElement.className = 'loading';
         
-        // Use setTimeout to allow the UI to update before heavy computation
         setTimeout(() => {
             try {
-                // Step 3: Prepare for similarity calculation
-                const likedGenres = new Set(likedMovie.genres);
+                // --- NEW: функции для косинусного сходства ---
+                const cosineSimilarity = (a, b) => {
+                    // защита от некорректных данных
+                    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return 0;
+
+                    let dot = 0;
+                    let normA = 0;
+                    let normB = 0;
+
+                    for (let i = 0; i < a.length; i++) {
+                        const ai = a[i] || 0;
+                        const bi = b[i] || 0;
+                        dot += ai * bi;
+                        normA += ai * ai;
+                        normB += bi * bi;
+                    }
+
+                    const denom = Math.sqrt(normA) * Math.sqrt(normB);
+                    return denom > 0 ? dot / denom : 0;
+                };
+
+                // если по какой-то причине genreVector нет — построим на лету
+                const buildVectorFromGenres = (movie) => {
+                    if (Array.isArray(movie.genreVector)) return movie.genreVector;
+                    const set = new Set(movie.genres || []);
+                    return genreNames.map(name => (set.has(name) ? 1 : 0));
+                };
+
+                const likedVec = buildVectorFromGenres(likedMovie);
+
+                // Step 3: Список кандидатов
                 const candidateMovies = movies.filter(movie => movie.id !== likedMovie.id);
                 
-                // Step 4: Calculate Jaccard similarity scores
+                // Step 4: Считаем косинусное сходство
                 const scoredMovies = candidateMovies.map(candidate => {
-                    const candidateGenres = new Set(candidate.genres);
-                    
-                    // Calculate intersection
-                    const intersection = new Set(
-                        [...likedGenres].filter(genre => candidateGenres.has(genre))
-                    );
-                    
-                    // Calculate union
-                    const union = new Set([...likedGenres, ...candidateGenres]);
-                    
-                    // Calculate Jaccard similarity
-                    const score = union.size > 0 ? intersection.size / union.size : 0;
-                    
-                    return {
-                        ...candidate,
-                        score: score
-                    };
+                    const candVec = buildVectorFromGenres(candidate);
+                    const score = cosineSimilarity(likedVec, candVec);
+                    return { ...candidate, score };
                 });
                 
-                // Step 5: Sort by score in descending order
+                // Step 5: Сортировка по score
                 scoredMovies.sort((a, b) => b.score - a.score);
                 
-                // Step 6: Select top recommendations
-                const topRecommendations = scoredMovies.slice(0, 2);
+                // Step 6: Топ-N рекомендаций
+                const TOP_N = 2; // при желании увеличьте до 5
+                const topRecommendations = scoredMovies.slice(0, TOP_N).filter(m => m.score > 0);
                 
-                // Step 7: Display results
+                // Step 7: Вывод
                 if (topRecommendations.length > 0) {
                     const recommendationTitles = topRecommendations.map(movie => movie.title);
-                    resultElement.textContent = `Because you liked "${likedMovie.title}", we recommend: ${recommendationTitles.join(', ')}`;
+                    resultElement.textContent = `Because you liked "${likedMovie.title}", we recommend (cosine): ${recommendationTitles.join(', ')}`;
                     resultElement.className = 'success';
                 } else {
-                    resultElement.textContent = `No recommendations found for "${likedMovie.title}".`;
+                    resultElement.textContent = `No recommendations found for "${likedMovie.title}" using cosine similarity.`;
                     resultElement.className = 'error';
                 }
             } catch (error) {
